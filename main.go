@@ -22,7 +22,7 @@ type Text struct {
 }
 
 const (
-	dbPath = "./postoffice"
+	dbPath = "./.db"
 )
 
 func routes() *chi.Mux {
