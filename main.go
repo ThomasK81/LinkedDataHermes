@@ -12,15 +12,6 @@ import (
 
 var db *badger.DB
 
-type JSONLD struct {
-	Text Text `json:"@context"`
-}
-
-type Text struct {
-	Id   string `json:"id"`
-	Text string `json:"text"`
-}
-
 const (
 	dbPath = "./.db"
 )
@@ -30,7 +21,6 @@ func routes() *chi.Mux {
 	router.Use(
 		render.SetContentType(render.ContentTypeJSON),
 		middleware.Logger,
-		middleware.DefaultCompress,
 		middleware.RedirectSlashes,
 		middleware.Recoverer,
 	)
@@ -43,41 +33,33 @@ func routes() *chi.Mux {
 
 func apiRoutes() *chi.Mux {
 	router := chi.NewRouter()
-	router.Get("/{mailbox}", getLDN)
-	router.Post("/{mailbox}", postLDN)
-	return router
-}
+	h := NewHermes(
+		"{{.Protocol}}//{{.Host}}/v1/api/mailbox/{{.InboxID}}",
+		"{{.Protocol}}//{{.Host}}/v1/api/mailbox/{{.InboxID}}/{{.NotificationID}}")
 
-func postLDN(w http.ResponseWriter, r *http.Request) {
-	err := db.Update(func(txn *badger.Txn) error {
-		// Your code here…
-		return nil
+	router.Get("/{inboxID}", func(w http.ResponseWriter, r *http.Request) {
+		inboxID := chi.URLParam(r, "inboxID")
+		h.GetInbox(inboxID, w, r)
 	})
-	if err != nil {
-		log.Fatal(err)
-	}
-}
 
-func getLDN(w http.ResponseWriter, r *http.Request) {
-	mailbox := chi.URLParam(r, "mailbox")
-	// err := db.View(func(txn *badger.Txn) error {
-	// 	// Your code here…
-	// 	return nil
-	// })
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	jsonld := JSONLD{Text: Text{
-		Id:   mailbox,
-		Text: "Hello world",
-	},
-	}
-	render.JSON(w, r, jsonld)
+	router.Post("/{inboxID}", func(w http.ResponseWriter, r *http.Request) {
+		inboxID := chi.URLParam(r, "inboxID")
+		h.CreateNotification(inboxID, w, r)
+	})
+
+	router.Get("/{inboxID}/{notificationID}", func(w http.ResponseWriter, r *http.Request) {
+		inboxID := chi.URLParam(r, "inboxID")
+		notificationID := chi.URLParam(r, "notificationID")
+		h.GetNotification(inboxID, notificationID, w, r)
+	})
+
+	return router
 }
 
 func main() {
 	router := routes()
-	db, err := badger.Open(badger.DefaultOptions(dbPath))
+	var err error
+	db, err = badger.Open(badger.DefaultOptions(dbPath))
 	if err != nil {
 		log.Fatal(err)
 	}
